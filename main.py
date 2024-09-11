@@ -8,7 +8,6 @@ from patched_data_loader import get_loader
 from torch.backends import cudnn
 import random
 import cv2
-import predict
 import predict_patched
 from PIL import Image
 import torch

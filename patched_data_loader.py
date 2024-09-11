@@ -50,10 +50,13 @@ class PatchImageFolder(ImageFolder):
 
 			image = Image.open(image_path)
 			GT = Image.open(GT_path)
+			GT = np.array(GT)  
+			GT[GT > 0] = 1
+			GT = Image.fromarray(GT)
 		
 			# Remove the zero border of the image due to preprocessing
-			image = image.crop((8, 8, image.width - 8, image.height - 8))
-			GT = GT.crop((8, 8, GT.width - 8, GT.height - 8))
+			#image = image.crop((8, 8, image.width - 8, image.height - 8))
+			#GT = GT.crop((8, 8, GT.width - 8, GT.height - 8))
         
 
 			# create patches   

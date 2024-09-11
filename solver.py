@@ -344,14 +344,14 @@ class Solver(object):
 						
 
 						# Visualization 
-												
-						imagesV = [images[0, 0, :, :], images[1, 0, :, :], images[2, 0, :, :]]  
-						GTsV = [GT[0, 0, :, :], GT[1, 0, :, :], GT[2, 0, :, :]]
-						SR_probsV = [SR_probs[0, 0, :, :], SR_probs[1, 0, :, :], SR_probs[2, 0, :, :]]
-						img_probsV = [img_probs[0, 0, :, :], img_probs[1, 0, :, :], img_probs[2, 0, :, :]]
-						self.visualiz_processing(imagesV, GTsV, SR_probsV, img_probsV, fig, axes)
-						#plt.tight_layout()
-						#plt.show()
+						if (images.size(0) >= 3):
+							imagesV = [images[0, 0, :, :], images[1, 0, :, :], images[2, 0, :, :]]  
+							GTsV = [GT[0, 0, :, :], GT[1, 0, :, :], GT[2, 0, :, :]]
+							SR_probsV = [SR_probs[0, 0, :, :], SR_probs[1, 0, :, :], SR_probs[2, 0, :, :]]
+							img_probsV = [img_probs[0, 0, :, :], img_probs[1, 0, :, :], img_probs[2, 0, :, :]]
+							self.visualiz_processing(imagesV, GTsV, SR_probsV, img_probsV, fig, axes)
+							#plt.tight_layout()
+							#plt.show()
 
 
 				acc = acc/length
@@ -453,50 +453,50 @@ class Solver(object):
 				torch.save(self.unet.state_dict(),unet_path)
 					
 			#===================================== Test ====================================#
-			del self.unet
-			if best_unet is not None:
-				del best_unet
-			self.build_model()
-			self.unet.load_state_dict(torch.load(unet_path))
+			# del self.unet
+			# if best_unet is not None:
+			# 	del best_unet
+			# self.build_model()
+			# self.unet.load_state_dict(torch.load(unet_path))
 			
-			self.unet.train(False)
-			self.unet.eval()
+			# self.unet.train(False)
+			# self.unet.eval()
 
-			acc = 0.	# Accuracy
-			SE = 0.		# Sensitivity (Recall)
-			SP = 0.		# Specificity
-			PC = 0. 	# Precision
-			F1 = 0.		# F1 Score
-			JS = 0.		# Jaccard Similarity
-			DC = 0.		# Dice Coefficient
-			length=0
-			for i, (images, GT) in enumerate(self.valid_loader):
+			# acc = 0.	# Accuracy
+			# SE = 0.		# Sensitivity (Recall)
+			# SP = 0.		# Specificity
+			# PC = 0. 	# Precision
+			# F1 = 0.		# F1 Score
+			# JS = 0.		# Jaccard Similarity
+			# DC = 0.		# Dice Coefficient
+			# length=0
+			# for i, (images, GT) in enumerate(self.valid_loader):
 				
-				for i in range(images_patches.size(1)):
-						images = images_patches[:, i, :, :, :]
-						GT = GT_patches[:, i, :, :, :]
-						images = images.to(self.device)
-						GT = GT.to(self.device)
+			# 	for i in range(images_patches.size(1)):
+			# 			images = images_patches[:, i, :, :, :]
+			# 			GT = GT_patches[:, i, :, :, :]
+			# 			images = images.to(self.device)
+			# 			GT = GT.to(self.device)
 
-						images = images.to(self.device)
-						GT = GT.to(self.device)
-						SR, _ = self.unet(images)
-						SR = F.sigmoid(SR)
-						acc += get_accuracy(SR,GT)
-						SE += get_sensitivity(SR,GT)
-						SP += get_specificity(SR,GT)
-						PC += get_precision(SR,GT)
-						F1 += get_F1(SR,GT)
-						JS += get_JS(SR,GT)
-						DC += get_DC(SR,GT)
-						loss_test = self.diceLoss(SR_flat,GT_flat)
-						#loss = self.criterion(SR_flat,GT_flat)
+			# 			images = images.to(self.device)
+			# 			GT = GT.to(self.device)
+			# 			SR, _ = self.unet(images)
+			# 			SR = F.sigmoid(SR)
+			# 			acc += get_accuracy(SR,GT)
+			# 			SE += get_sensitivity(SR,GT)
+			# 			SP += get_specificity(SR,GT)
+			# 			PC += get_precision(SR,GT)
+			# 			F1 += get_F1(SR,GT)
+			# 			JS += get_JS(SR,GT)
+			# 			DC += get_DC(SR,GT)
+			# 			loss_test = self.diceLoss(SR_flat,GT_flat)
+			# 			#loss = self.criterion(SR_flat,GT_flat)
 						
-						test_loss += loss_test.item()
-						length += images.size(0)
-			print('[Test] loss: %.4f'%(test_loss))	
-			endTime = time.time()
-			print("[INFO] total time taken to train the model: {:.2f}s".format(endTime - startTime))
+			# 			test_loss += loss_test.item()
+			# 			length += images.size(0)
+			# print('[Test] loss: %.4f'%(test_loss))	
+			# endTime = time.time()
+			# print("[INFO] total time taken to train the model: {:.2f}s".format(endTime - startTime))
 			# acc = acc/length
 			# SE = SE/length
 			# SP = SP/length
