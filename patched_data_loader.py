@@ -1,3 +1,5 @@
+from calendar import c
+from ctypes import c_wchar
 import os
 import random
 from random import shuffle
@@ -74,10 +76,20 @@ class PatchImageFolder(ImageFolder):
 				#GT_patch = GT_patch.squeeze(0)
 				#img_patch = Image.fromarray(img_patch.numpy())
 				#GT_patch = Image.fromarray(GT_patch.numpy())
-				img_pro_patch = transform(img_patch)
-				GT_pro_patch = transform(GT_patch)
-				img_pro_patches.append(img_pro_patch)
-				GT_pro_patches.append(GT_pro_patch)
+				
+				# trasform the patches with augmenting dat
+				# img_pro_patch = transform(img_patch)
+				# GT_pro_patch = transform(GT_patch)				
+				# img_pro_patches.append(img_pro_patch)
+				# GT_pro_patches.append(GT_pro_patch)
+				
+				# transform the patches with augmenting data			
+				for T in range(5):
+					img_aug, GT_aug = self.augment_data(img_patch, GT_patch, T)
+					img_pro_patch = transform(img_aug)
+					GT_pro_patch = transform(GT_aug)
+					img_pro_patches.append(img_pro_patch)
+					GT_pro_patches.append(GT_pro_patch)
 				
 			
 			# Convert the lists of patches to tensors
@@ -114,6 +126,35 @@ class PatchImageFolder(ImageFolder):
 		#transform.append(T.ToTensor())
 		transform = T.Compose(transform)
 		return transform
+
+
+	def augment_data(self, img_patch, GT_patch, T):
+		if (T==0):
+			img_aug = F.hflip(img_patch)
+			GT_aug = F.hflip(GT_patch)
+		elif (T==1):
+			img_aug = F.vflip(img_patch)
+			GT_aug = F.vflip(GT_patch)
+		elif (T==2):
+			img_aug = F.rotate(img_patch, 90)
+			GT_aug = F.rotate(GT_patch, 90)
+		elif (T==3):
+			img_aug = F.rotate(img_patch, 180)
+			GT_aug = F.rotate(GT_patch, 180)
+		elif (T==4):
+			r1 = np.int32(random.random()*0.25*255)
+			r2 = np.int32(random.random()*0.25*255)
+			c_height = 255-2*r1
+			c_width = 255-2*r2
+			img_aug = F.resized_crop(img_patch, r1, r2, c_height, c_width, size=(256, 256))
+			GT_aug = F.resized_crop(GT_patch, r1, r2, c_height, c_width, size=(256, 256))
+		else:
+			img_aug = img_patch
+			GT_aug = GT_patch
+			
+		return img_aug, GT_aug
+			
+		
 
 def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',augmentation_prob=0.4):
 	"""Builds and returns Dataloader."""
