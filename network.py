@@ -53,6 +53,10 @@ class up_conv(nn.Module):
             nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
 		    #nn.LayerNorm(ch_out),
             nn.BatchNorm2d(ch_out),
+			nn.ReLU(inplace=True),
+            nn.Conv2d(ch_out,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
+		    #nn.LayerNorm(ch_out),
+            nn.BatchNorm2d(ch_out),
 			nn.ReLU(inplace=True)
         )
 
@@ -147,6 +151,7 @@ class U_Net(nn.Module):
         super(U_Net,self).__init__()
         
         self.normalizer = nn.LayerNorm([1, 256, 256])
+        #self.normalizer = nn.LayerNorm([1, 958, 1405])
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
 
@@ -155,6 +160,10 @@ class U_Net(nn.Module):
         self.Conv3 = conv_block(ch_in=128,ch_out=256)
         self.Conv4 = conv_block(ch_in=256,ch_out=512)
         self.Conv5 = conv_block(ch_in=512,ch_out=1024)
+        self.Conv6 = conv_block(ch_in=1024,ch_out=2048)
+        
+        self.Up6 = up_conv(ch_in=2048,ch_out=1024)
+        self.Up_conv6 = conv_block(ch_in=2048, ch_out=1024)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
@@ -170,20 +179,20 @@ class U_Net(nn.Module):
 
         self.Conv_1x1 = nn.Conv2d(64,output_ch,kernel_size=1,stride=1,padding=0)
         self.BottleNeck = nn.Sequential(
-            nn.Conv2d(1024, 1024, kernel_size=7, stride=1, padding=3, bias=True),
-            nn.BatchNorm2d(1024),
+            nn.Conv2d(2048, 2048, kernel_size=7, stride=1, padding=3, bias=True),
+            nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True),
-            nn.Conv2d(1024, 1024, kernel_size=7, stride=1, padding=3, bias=True),
-            nn.BatchNorm2d(1024),
+            nn.Conv2d(2048, 2048, kernel_size=7, stride=1, padding=3, bias=True),
+            nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True),
-            nn.Conv2d(1024, 1024, kernel_size=7, stride=1, padding=3, bias=True),
-            nn.BatchNorm2d(1024),
+            nn.Conv2d(2048, 2048, kernel_size=7, stride=1, padding=3, bias=True),
+            nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True)
         )
 
     def forward(self,x):
         # Normalization
-        x = self.normalizer(x)
+        #x = self.normalizer(x)
         
         # encoding path
         x1 = self.Conv1(x)
@@ -199,16 +208,23 @@ class U_Net(nn.Module):
 
         x5 = self.Maxpool(x4)
         x5 = self.Conv5(x5)
+        
+        x6 = self.Maxpool(x5)
+        x6 = self.Conv6(x6)
 
         # bottleneck
-        x5 = self.BottleNeck(x5)
+        x6 = self.BottleNeck(x6)
         
 
         # decoding + concat path
+        d6 = self.Up6(x6)
+        d6 = torch.nn.functional.interpolate(d6, size=x5.shape[2:])
+        d6 = torch.cat((x5,d6),dim=1)
+        d6 = self.Up_conv6(d6)
+
         d5 = self.Up5(x5)
         d5 = torch.nn.functional.interpolate(d5, size=x4.shape[2:])
-        d5 = torch.cat((x4, d5), dim=1)
-        
+        d5 = torch.cat((x4, d5), dim=1)        
         d5 = self.Up_conv5(d5)
         
         d4 = self.Up4(d5)
@@ -228,7 +244,7 @@ class U_Net(nn.Module):
 
         d1 = self.Conv_1x1(d2)
 
-        return d1, x5
+        return d1, x6
         
 
 
