@@ -192,7 +192,7 @@ class U_Net(nn.Module):
 
     def forward(self,x):
         # Normalization
-        #x = self.normalizer(x)
+        x = self.normalizer(x)
         
         # encoding path
         x1 = self.Conv1(x)

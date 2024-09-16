@@ -59,7 +59,7 @@ class Solver(object):
 		self.build_model()
 		
 		# addtional 
-		self.BottleNeck_size = 1024
+		self.BottleNeck_size = 2048
 	
 	def diceLoss(self, x, y):
 		intersection = torch.sum(x * y) + 1e-7
@@ -127,7 +127,7 @@ class Solver(object):
 		return x
 	
 	def bin_gt(self, gt):
-		for i in range(4):
+		for i in range(5):
 			gt = self.binning(gt)
 		return gt
 		
@@ -282,7 +282,7 @@ class Solver(object):
 				
 				print("epoch", epoch+1)
 				# check data loader
-				#images_patches, GT_patches = self.train_loader.dataset.__getitem__(60)
+				#images_patches, GT_patches = self.train_loader.dataset.__getitem__(6)
 				
 				for i, (images_patches, GT_patches) in enumerate(self.train_loader):
 					# train for each patch

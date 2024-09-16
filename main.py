@@ -37,7 +37,7 @@ def main(config):
     decay_epoch = int(epoch*decay_ratio)
 
     config.augmentation_prob = augmentation_prob
-    config.num_epochs = 100 #epoch
+    config.num_epochs = 200 #epoch
     config.lr = lr
     config.num_epochs_decay = decay_epoch
 
@@ -72,7 +72,7 @@ def main(config):
     elif config.mode == 'test':
         #testpath = "./dataset/test"
         #predict_patched.make_predictions("./models/256_128/U_Net-200-0.0002-6-0.2176.pkl", config.test_path) 
-        predict_patched.make_predictions("./models/U_Net-100-0.0003-57-0.1062.pkl", config.test_path)      #update this part to include all images in the test folder
+        predict_patched.make_predictions("./models/U_Net-200-0.0001-49-0.4124.pkl", config.test_path)      #update this part to include all images in the test folder
 
     
 
