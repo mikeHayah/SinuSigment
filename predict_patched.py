@@ -77,22 +77,25 @@ def make_predictions(state_dict_path, path):
 				# image_uint8 = image_data.astype(np.uint8)
 				# image = Image.fromarray(image_uint8)
 				# image = image.convert('L')
+				
 				# predicate whole image at ones
-				# img_tensor = T.ToTensor()(image).unsqueeze(0)  # Convert to tensor and add batch dimension
-				# normalizer = nn.LayerNorm([1, 958, 1405])
+				img_tensor = T.ToTensor()(image).unsqueeze(0)  # Convert to tensor and add batch dimension
+				normalizer = nn.LayerNorm([1, 958, 1405])
 				#normalizer = nn.LayerNorm([1, 744, 1103])
 				
 
 				# add the preceeding and following images as channels
-				image = Image.merge("RGB", (prec_image, image, foll_image))# check if the image is 3 channel or not
-				# predicate whole image at ones
-				img_tensor = T.ToTensor()(image)
-				normalizer = nn.LayerNorm([3, 958, 1405])
-				img_tensor = normalizer(img_tensor)
-				img_tensor = img_tensor.unsqueeze(0) 
+				# image = Image.merge("RGB", (prec_image, image, foll_image))# check if the image is 3 channel or not
+				# # predicate whole image at ones
+				# img_tensor = T.ToTensor()(image)
+				# normalizer = nn.LayerNorm([3, 958, 1405])
+				# img_tensor = normalizer(img_tensor)
+				# img_tensor = img_tensor.unsqueeze(0) 
+				
+
 				predMask, checkbtlnek , _, _, _=  model(img_tensor.to(device))
 				output = torch.sigmoid(predMask)
-				sm = nn.ReLU()
+				#sm = nn.ReLU()
 				#output = sm(predMask)
 
 
