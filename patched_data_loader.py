@@ -10,6 +10,7 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 from PIL import Image
 from torchvision.datasets import ImageFolder
+from sklearn.utils import shuffle
 
 
 
@@ -36,7 +37,7 @@ class PatchImageFolder(ImageFolder):
         
         # Extract patches using unfold
 		img_patches = img_tensor.unfold(2, self.patch_size, self.stride).unfold(3, self.patch_size, self.stride)
-		img_patches = img_patches.contiguous().view(-1, 1, self.patch_size, self.patch_size)  # Flatten patches
+		img_patches = img_patches.contiguous().view(-1, 3, self.patch_size, self.patch_size)  # Flatten patches
 		
 		GT_patches = GT_tensor.unfold(2, self.patch_size, self.stride).unfold(3, self.patch_size, self.stride)
 		GT_patches = GT_patches.contiguous().view(-1, 1, self.patch_size, self.patch_size)
@@ -45,12 +46,27 @@ class PatchImageFolder(ImageFolder):
 		
 	def __getitem__(self, index):
 		"""Reads an image from a file and preprocesses it and returns."""
+		# Add precceding and following images
+		if (index == 0):
+			image_path_prec = self.image_paths[index]
+			image_path_foll = self.image_paths[index+1]
+		elif (index == len(self.image_paths)-1):
+			image_path_prec = self.image_paths[index-1]
+			image_path_foll = self.image_paths[index]
+		else:
+			image_path_prec = self.image_paths[index-1]
+			image_path_foll = self.image_paths[index+1]
+		
+		prec_image = Image.open(image_path_prec).convert("L")
+		foll_image = Image.open(image_path_foll).convert("L")
+		
+		# Read the images
 		image_path = self.image_paths[index]
 		if image_path.endswith('.tif'):
 			filename = image_path.split('/')[-1][:-len(".tif")]
 			GT_path = self.GT_paths+"/" + filename + ".tif"
 
-			image = Image.open(image_path)
+			image = Image.open(image_path).convert("L")
 			GT = Image.open(GT_path)
 			GT = np.array(GT)  
 			GT[GT > 0] = 1
@@ -59,10 +75,12 @@ class PatchImageFolder(ImageFolder):
 			# Remove the zero border of the image due to preprocessing
 			#image = image.crop((8, 8, image.width - 8, image.height - 8))
 			#GT = GT.crop((8, 8, GT.width - 8, GT.height - 8))
-        
+			
+			# add the preceeding and following images as channels
+			image = Image.merge("RGB", (prec_image, image, foll_image))
 
 			# create patches   
-			img_patches, GT_patches  = self._extract_patches(image.convert("L"), GT.convert("L"))
+			img_patches, GT_patches  = self._extract_patches(image, GT.convert("L"))
 
 			# Apply transformations
 			img_pro_patches = []
@@ -91,7 +109,9 @@ class PatchImageFolder(ImageFolder):
 					img_pro_patches.append(img_pro_patch)
 					GT_pro_patches.append(GT_pro_patch)
 				
-			
+			# Shuffle the patches
+			#img_pro_patches, GT_pro_patches = shuffle(img_pro_patches, GT_pro_patches)
+
 			# Convert the lists of patches to tensors
 			img_pro = torch.stack(img_pro_patches)
 			GT_pro = torch.stack(GT_pro_patches)

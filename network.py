@@ -150,7 +150,7 @@ class U_Net(nn.Module):
     def __init__(self,img_ch=1,output_ch=1):
         super(U_Net,self).__init__()
         
-        self.normalizer = nn.LayerNorm([1, 256, 256])
+        self.normalizer = nn.LayerNorm([3, 256, 256])
         #self.normalizer = nn.LayerNorm([1, 958, 1405])
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
@@ -162,11 +162,12 @@ class U_Net(nn.Module):
         self.Conv5 = conv_block(ch_in=512,ch_out=1024)
         self.Conv6 = conv_block(ch_in=1024,ch_out=2048)
         
+        #self.Up6 = up_conv(ch_in=2048,ch_out=1024)
         self.Up6 = up_conv(ch_in=2048,ch_out=1024)
-        self.Up_conv6 = conv_block(ch_in=2048, ch_out=1024)
+        self.Up_conv6 = conv_block(ch_in=3072, ch_out=1024)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
-        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
+        self.Up_conv5 = conv_block(ch_in=1536, ch_out=512)
 
         self.Up4 = up_conv(ch_in=512,ch_out=256)
         self.Up_conv4 = conv_block(ch_in=512, ch_out=256)
@@ -189,10 +190,48 @@ class U_Net(nn.Module):
             nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True)
         )
+        self.Att1 = Attention_block(F_g=64,F_l=64,F_int=32)
+        self.Att2 = Attention_block(F_g=128,F_l=128,F_int=64)
+        self.Att3 = Attention_block(F_g=256,F_l=256,F_int=128)
+        self.Att4 = Attention_block(F_g=512,F_l=512,F_int=256)
+        self.Att5 = Attention_block(F_g=1024,F_l=1024,F_int=512)
+
+        
 
     def forward(self,x):
         # Normalization
-        x = self.normalizer(x)
+        #x = self.normalizer(x)
+        
+        # split channels
+        xp = x[:,0,:,:].unsqueeze(1)
+        xf = x[:,2,:,:].unsqueeze(1)
+        x = x[:,1,:,:].unsqueeze(1)
+        
+        # encode xp and xf
+        xp1 = self.Conv1(xp)
+        xf1 = self.Conv1(xf)
+        xp2 = self.Maxpool(xp1)
+        xf2 = self.Maxpool(xf1)
+        xp2 = self.Conv2(xp2)
+        xf2 = self.Conv2(xf2)
+        xp3 = self.Maxpool(xp2)
+        xf3 = self.Maxpool(xf2)
+        xp3 = self.Conv3(xp3)
+        xf3 = self.Conv3(xf3)
+        xp4 = self.Maxpool(xp3)
+        xf4 = self.Maxpool(xf3)
+        xp4 = self.Conv4(xp4)
+        xf4 = self.Conv4(xf4)
+        xp5 = self.Maxpool(xp4)
+        xf5 = self.Maxpool(xf4)
+        xp5 = self.Conv5(xp5)
+        xf5 = self.Conv5(xf5)
+        xp6 = self.Maxpool(xp5)
+        xf6 = self.Maxpool(xf5)
+        xp6 = self.Conv6(xp6)
+        xf6 = self.Conv6(xf6)
+        
+        
         
         # encoding path
         x1 = self.Conv1(x)
@@ -215,36 +254,51 @@ class U_Net(nn.Module):
         # bottleneck
         x6 = self.BottleNeck(x6)
         
-
         # decoding + concat path
         d6 = self.Up6(x6)
-        d6 = torch.nn.functional.interpolate(d6, size=x5.shape[2:])
-        d6 = torch.cat((x5,d6),dim=1)
+        d6 = torch.nn.functional.interpolate(d6, size=x5.shape[2:]) 
+        #g5 = self.Att5(g=d6,x=x5)
+        #d6 = torch.cat((g5,d6),dim=1)
+        #d6 = torch.cat((x5,d6),dim=1)
+        gp5 = self.Att5(g=d6,x=xp5)
+        gf5 = self.Att5(g=d6,x=xf5)
+        d6 = torch.cat((gp5,d6,gf5),dim=1)
         d6 = self.Up_conv6(d6)
 
         d5 = self.Up5(x5)
         d5 = torch.nn.functional.interpolate(d5, size=x4.shape[2:])
-        d5 = torch.cat((x4, d5), dim=1)        
+        #g4 = self.Att4(g=d5,x=x4)
+        #d5 = torch.cat((g4,d5),dim=1)
+        #d5 = torch.cat((x4, d5), dim=1)  
+        gp4 = self.Att4(g=d5,x=xp4) 
+        gf4 = self.Att4(g=d5,x=xf4)
+        d5 = torch.cat((gp4,d5,gf4),dim=1)
         d5 = self.Up_conv5(d5)
         
         d4 = self.Up4(d5)
         d4 = torch.nn.functional.interpolate(d4, size=x3.shape[2:])
-        d4 = torch.cat((x3,d4),dim=1)
+        g3 = self.Att3(g=d4,x=x3)
+        d4 = torch.cat((g3,d4),dim=1)
+        #d4 = torch.cat((x3,d4),dim=1)
         d4 = self.Up_conv4(d4)
 
         d3 = self.Up3(d4)
         d3 = torch.nn.functional.interpolate(d3, size=x2.shape[2:])
+        #g2 = self.Att2(g=d3,x=x2)
+        #d3 = torch.cat((g2,d3),dim=1)
         d3 = torch.cat((x2,d3),dim=1)
         d3 = self.Up_conv3(d3)
 
         d2 = self.Up2(d3)
         d2 = torch.nn.functional.interpolate(d2, size=x1.shape[2:])
+        #g1 = self.Att1(g=d2,x=x1)
+        #d2 = torch.cat((g1,d2),dim=1)
         d2 = torch.cat((x1,d2),dim=1)
         d2 = self.Up_conv2(d2)
 
         d1 = self.Conv_1x1(d2)
 
-        return d1, x6
+        return d1, x6, d6, d5, d4
         
 
 

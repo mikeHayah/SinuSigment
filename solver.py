@@ -126,8 +126,8 @@ class Solver(object):
 		x = x.mean(dim=(3, 5))
 		return x
 	
-	def bin_gt(self, gt):
-		for i in range(5):
+	def bin_gt(self, gt, i):
+		for i in range(i):
 			gt = self.binning(gt)
 		return gt
 		
@@ -282,7 +282,7 @@ class Solver(object):
 				
 				print("epoch", epoch+1)
 				# check data loader
-				#images_patches, GT_patches = self.train_loader.dataset.__getitem__(6)
+				images_patches, GT_patches = self.train_loader.dataset.__getitem__(6)
 				
 				for i, (images_patches, GT_patches) in enumerate(self.train_loader):
 					# train for each patch
@@ -305,7 +305,7 @@ class Solver(object):
 					
 
 						# SR : Segmentation Result
-						SR, image_btlnek = self.unet(images)
+						SR, image_btlnek, d6, d5, d4 = self.unet(images)
 						SR_probs = F.sigmoid(SR)
 						SR_flat = SR_probs.view(SR_probs.size(0),-1)
 
@@ -315,17 +315,40 @@ class Solver(object):
 						#epoch_loss += loss.item()
 
 						# find loose at bottle neck
-						gt_btlnek = self.bin_gt(GT)
-					
-						conv = nn.Conv2d(self.BottleNeck_size, 1, kernel_size=1).to(self.device)
-						image_btlnek = conv(image_btlnek.to(self.device))
+						gt_btlnek = self.bin_gt(GT, 5)
+						gt_4 = self.bin_gt(GT, 4)
+						gt_3 = self.bin_gt(GT, 3)
+						gt_2 = self.bin_gt(GT, 2)
+						#gt_1 = self.bin_gt(GT, 1)
+						
+						# claculate guided losses
+						conv4 = nn.Conv2d(int(self.BottleNeck_size/2), 1, kernel_size=1).to(self.device)
+						conv3 = nn.Conv2d(int(self.BottleNeck_size/4), 1, kernel_size=1).to(self.device)
+						conv2 = nn.Conv2d(int(self.BottleNeck_size/8), 1, kernel_size=1).to(self.device)
+						#conv1 = nn.Conv2d(int(self.BottleNeck_size/16), 1, kernel_size=1).to(self.device)
+						
+						gd4 = F.sigmoid(conv4(d6))
+						gd3 = F.sigmoid(conv3(d5))
+						gd2 = F.sigmoid(conv2(d4))
+						#gd1 = F.sigmoid(conv1(d3))
+						
+						loss_gd4 = self.diceLoss(gd4.view(gd4.size(0), -1), gt_4.view(gt_4.size(0), -1))
+						loss_gd3 = self.diceLoss(gd3.view(gd3.size(0), -1), gt_3.view(gt_3.size(0), -1))
+						loss_gd2 = self.diceLoss(gd2.view(gd2.size(0), -1), gt_2.view(gt_2.size(0), -1))
+						#loss_gd1 = self.diceLoss(gd1.view(gd1.size(0), -1), gt_1.view(gt_1.size(0), -1))
+						
+						guid_loss = loss_gd4 + loss_gd3 + loss_gd2 #+ loss_gd1
+						
+						# calculate bottle neck loss
+						conv5 = nn.Conv2d(self.BottleNeck_size, 1, kernel_size=1).to(self.device)
+						image_btlnek = conv5(image_btlnek.to(self.device))
 						img_probs = F.sigmoid(image_btlnek)
 						loss_btlnek = self.diceLoss(img_probs.view(img_probs.size(0), -1), gt_btlnek.view(gt_btlnek.size(0), -1))
 					
 						# calculate full loss
-						loss_ratio = 0.75
-						loss = (1-loss_ratio)*loss_byend + loss_ratio*loss_btlnek
-						epoch_loss += (1-loss_ratio)*loss_byend.item() + loss_ratio*loss_btlnek.item()
+						#loss_ratio = 0.75
+						loss = 0.2*loss_byend + 0.65*loss_btlnek + 0.15*guid_loss
+						epoch_loss += 0.2*loss_byend.item() + 0.65*loss_btlnek.item()+ 0.15*guid_loss.item()
 					
 
 						# Backprop + optimize
@@ -402,7 +425,7 @@ class Solver(object):
 						
 						images = images.to(self.device)
 						GT = GT.to(self.device)
-						SR, _ = self.unet(images)
+						SR, _, _, _, _ = self.unet(images)
 						SR = F.sigmoid(SR)
 						
 						loss_val = self.diceLoss(SR_flat,GT_flat)
@@ -513,4 +536,216 @@ class Solver(object):
 			#f.close()
 			
 
+	def retrain(self, state_dict_path):
+		
+
+		#====================================== Re-Training ===========================================#
+		#===========================================================================================#
+		# Load the state dictionary
+		state_dict = torch.load(state_dict_path, map_location=torch.device(self.device))
+	
+		# Initialize the model
+		model = U_Net(img_ch=1,output_ch=1)
+
+		# Load the state dictionary into the model
+		model.load_state_dict(state_dict)
+
+		# Move the model to the desired device
+		model = model.to(self.device)
+		
+				
+		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f_retrianed.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
+		for name, param in model.named_parameters():
+			if "BottleNeck" in name or "Conv_1x1" in name or "Up_conv2" in name or "Up2" in name:
+				param.requires_grad = True
+			else:
+				param.requires_grad = False
+				
+		
+		startTime = time.time()
+		lr = self.lr
+		best_unet_score = 0.
+		best_unet = None
+		best_epoch = 0
 			
+		plt.ion()
+		fig, axes = plt.subplots(3, 4, figsize=(25,25)) 
+			
+		for epoch in tqdm(range(self.num_epochs)):
+		#for epoch in range(self.num_epochs):
+
+			self.unet.train(True)
+			epoch_loss = 0
+			val_loss = 0
+			test_loss = 0
+				
+			acc = 0.	# Accuracy
+			SE = 0.		# Sensitivity (Recall)
+			SP = 0.		# Specificity
+			PC = 0. 	# Precision
+			F1 = 0.		# F1 Score
+			JS = 0.		# Jaccard Similarity
+			DC = 0.		# Dice Coefficient
+			length = 0
+				
+			print("epoch", epoch+1)
+			# check data loader
+			#images_patches, GT_patches = self.train_loader.dataset.__getitem__(6)
+				
+			for i, (images_patches, GT_patches) in enumerate(self.train_loader):
+				# train for each patch
+				torch.save(self.unet.state_dict(), unet_path)
+					
+				for i in range(images_patches.size(1)):
+					images = images_patches[:, i, :, :, :]
+					GT = GT_patches[:, i, :, :, :]
+					images = images.to(self.device)
+					GT = GT.to(self.device)
+						
+					# # check images and GT
+					# self.check_images(images, GT)
+					
+					# # check binning fuction
+					# gt_btlnek = self.bin_gt(GT)
+					# self.check_bin(gt_btlnek, GT, i)
+
+						
+					
+
+					# SR : Segmentation Result
+					SR, image_btlnek, d6, d5, d4 = self.unet(images)
+					SR_probs = F.sigmoid(SR)
+					SR_flat = SR_probs.view(SR_probs.size(0),-1)
+
+					GT_flat = GT.view(GT.size(0),-1)
+					loss_byend = self.diceLoss(SR_flat,GT_flat)
+					#loss = self.criterion(SR_flat,GT_flat)
+					#epoch_loss += loss.item()
+
+					# find loose at bottle neck
+					gt_btlnek = self.bin_gt(GT, 5)
+					gt_4 = self.bin_gt(GT, 4)
+					gt_3 = self.bin_gt(GT, 3)
+					gt_2 = self.bin_gt(GT, 2)
+					#gt_1 = self.bin_gt(GT, 1)
+						
+					# claculate guided losses
+					conv4 = nn.Conv2d(int(self.BottleNeck_size/2), 1, kernel_size=1).to(self.device)
+					conv3 = nn.Conv2d(int(self.BottleNeck_size/4), 1, kernel_size=1).to(self.device)
+					conv2 = nn.Conv2d(int(self.BottleNeck_size/8), 1, kernel_size=1).to(self.device)
+					#conv1 = nn.Conv2d(int(self.BottleNeck_size/16), 1, kernel_size=1).to(self.device)
+						
+					gd4 = F.sigmoid(conv4(d6))
+					gd3 = F.sigmoid(conv3(d5))
+					gd2 = F.sigmoid(conv2(d4))
+					#gd1 = F.sigmoid(conv1(d3))
+						
+					loss_gd4 = self.diceLoss(gd4.view(gd4.size(0), -1), gt_4.view(gt_4.size(0), -1))
+					loss_gd3 = self.diceLoss(gd3.view(gd3.size(0), -1), gt_3.view(gt_3.size(0), -1))
+					loss_gd2 = self.diceLoss(gd2.view(gd2.size(0), -1), gt_2.view(gt_2.size(0), -1))
+					#loss_gd1 = self.diceLoss(gd1.view(gd1.size(0), -1), gt_1.view(gt_1.size(0), -1))
+						
+					guid_loss = loss_gd4 + loss_gd3 + loss_gd2 #+ loss_gd1
+						
+					# calculate bottle neck loss
+					conv5 = nn.Conv2d(self.BottleNeck_size, 1, kernel_size=1).to(self.device)
+					image_btlnek = conv5(image_btlnek.to(self.device))
+					img_probs = F.sigmoid(image_btlnek)
+					loss_btlnek = self.diceLoss(img_probs.view(img_probs.size(0), -1), gt_btlnek.view(gt_btlnek.size(0), -1))
+					
+					# calculate full loss
+					#loss_ratio = 0.75
+					loss = 0.2*loss_byend + 0.65*loss_btlnek + 0.15*guid_loss
+					epoch_loss += 0.2*loss_byend.item() + 0.65*loss_btlnek.item()+ 0.15*guid_loss.item()
+					
+
+					# Backprop + optimize
+					self.reset_grad()
+					loss.backward()
+					self.optimizer.step()
+
+					acc += get_accuracy(SR,GT)
+					SE += get_sensitivity(SR,GT)
+					SP += get_specificity(SR,GT)
+					PC += get_precision(SR,GT)
+					F1 += get_F1(SR,GT)
+					JS += get_JS(SR,GT)
+					DC += get_DC(SR,GT)
+					length += images.size(0)
+						
+
+					# Visualization 
+					if (images.size(0) >= 3):
+						imagesV = [images[0, 0, :, :], images[1, 0, :, :], images[2, 0, :, :]]  
+						GTsV = [GT[0, 0, :, :], GT[1, 0, :, :], GT[2, 0, :, :]]
+						SR_probsV = [SR_probs[0, 0, :, :], SR_probs[1, 0, :, :], SR_probs[2, 0, :, :]]
+						img_probsV = [img_probs[0, 0, :, :], img_probs[1, 0, :, :], img_probs[2, 0, :, :]]
+						self.visualiz_processing(imagesV, GTsV, SR_probsV, img_probsV, fig, axes)
+						#plt.tight_layout()
+						#plt.show()
+
+
+			acc = acc/length
+			SE = SE/length
+			SP = SP/length
+			PC = PC/length
+			F1 = F1/length
+			JS = JS/length
+			DC = DC/length
+
+			# Print the log info
+			print("[INFO] EPOCH: {}/{}".format(epoch+1, self.num_epochs))
+			print("Train loss: {:.6f}".format(epoch_loss))
+				
+						
+
+			# Decay learning rate
+			if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
+				lr -= (self.lr / float(self.num_epochs_decay))
+				for param_group in self.optimizer.param_groups:
+					param_group['lr'] = lr
+				print ('Decay learning rate to lr: {}.'.format(lr))
+				
+				
+			#===================================== Validation ====================================#
+			self.unet.train(False)
+			self.unet.eval()
+
+			acc = 0.	# Accuracy
+			SE = 0.		# Sensitivity (Recall)
+			SP = 0.		# Specificity
+			PC = 0. 	# Precision
+			F1 = 0.		# F1 Score
+			JS = 0.		# Jaccard Similarity
+			DC = 0.		# Dice Coefficient
+			length=0
+			for i, (images, GT) in enumerate(self.valid_loader):
+				for i in range(images_patches.size(1)):
+					images = images_patches[:, i, :, :, :]
+					GT = GT_patches[:, i, :, :, :]
+					images = images.to(self.device)
+					GT = GT.to(self.device)
+						
+					images = images.to(self.device)
+					GT = GT.to(self.device)
+					SR, _, _, _, _ = self.unet(images)
+					SR = F.sigmoid(SR)
+						
+					loss_val = self.diceLoss(SR_flat,GT_flat)
+					#loss = self.criterion(SR_flat,GT_flat)
+						
+					val_loss += loss_val.item()
+
+					acc += get_accuracy(SR,GT)
+					
+						
+					length += images.size(0)
+					
+				
+			print('[Validation] loss: %.4f'%(val_loss))
+				
+			torch.save(self.unet.state_dict(),unet_path)
+					
+			
+			
+		

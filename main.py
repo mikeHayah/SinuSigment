@@ -37,7 +37,7 @@ def main(config):
     decay_epoch = int(epoch*decay_ratio)
 
     config.augmentation_prob = augmentation_prob
-    config.num_epochs = 200 #epoch
+    config.num_epochs = 150 #epoch
     config.lr = lr
     config.num_epochs_decay = decay_epoch
 
@@ -72,8 +72,9 @@ def main(config):
     elif config.mode == 'test':
         #testpath = "./dataset/test"
         #predict_patched.make_predictions("./models/256_128/U_Net-200-0.0002-6-0.2176.pkl", config.test_path) 
-        predict_patched.make_predictions("./models/U_Net-200-0.0001-49-0.4124.pkl", config.test_path)      #update this part to include all images in the test folder
-
+        predict_patched.make_predictions("./models/U_Net-150-0.0003-67-0.1903_25D.pkl", config.test_path)      #update this part to include all images in the test folder
+    elif config.mode == 'retrain':
+        solver.retrain("./models/U_Net-150-0.0002-27-0.0261_retrianed.pkl")
     
 
 
@@ -105,7 +106,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_ch', type=int, default=1)
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--num_epochs_decay', type=int, default=70)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--lr', type=float, default=0.0002)
     parser.add_argument('--beta1', type=float, default=0.5)        # momentum1 in Adam
@@ -116,12 +117,12 @@ if __name__ == '__main__':
     parser.add_argument('--val_step', type=int, default=2)
 
     # misc
-    parser.add_argument('--mode', type=str, default='train')
+    parser.add_argument('--mode', type=str, default='test')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='./models/')
     parser.add_argument('--train_path', type=str, default='./dataset/train/')
     parser.add_argument('--valid_path', type=str, default='./dataset/valid/')
-    parser.add_argument('--test_path', type=str, default='./dataset/test_data/')
+    parser.add_argument('--test_path', type=str, default='./dataset/exp9_salty/')
     parser.add_argument('--result_path', type=str, default='./result/')
 
     parser.add_argument('--cuda_idx', type=int, default=1)
