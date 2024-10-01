@@ -164,10 +164,10 @@ class U_Net(nn.Module):
         
         #self.Up6 = up_conv(ch_in=2048,ch_out=1024)
         self.Up6 = up_conv(ch_in=2048,ch_out=1024)
-        self.Up_conv6 = conv_block(ch_in=3072, ch_out=1024)
+        self.Up_conv6 = conv_block(ch_in=2048, ch_out=1024)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
-        self.Up_conv5 = conv_block(ch_in=1536, ch_out=512)
+        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
 
         self.Up4 = up_conv(ch_in=512,ch_out=256)
         self.Up_conv4 = conv_block(ch_in=512, ch_out=256)
